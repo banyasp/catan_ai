@@ -159,7 +159,7 @@ class CapstoneCatanatronEnv(gym.Env):
         assert all(p.color != Color.BLUE for p in self.enemies)
         self.self_player = Player(Color.BLUE)
         self.opp_color = self.enemies[0].color
-        self.players = [self.self_player] + self.enemies[0]  # type: ignore
+        self.players = [self.self_player] + list(self.enemies)
         self.representation = "vector"
         self.invalid_actions_count = 0
         self.max_invalid_actions = 10
