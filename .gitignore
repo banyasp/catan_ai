@@ -6,6 +6,8 @@ data/
 profile.pstats
 catanatron-venv
 .DS_Store
+Python-3.12.0.tgz
+Python-3.12.0/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -145,6 +147,8 @@ capstone_agent/models/*_*T*Z.pt
 # Training data and logs (large, regeneratable)
 capstone_agent/data/*.npz
 capstone_agent/data/*.jsonl
+
+capstone_agent/dcc_training_models/
 
 # Atomic-save temp files
 *.tmp.npz
