@@ -10,6 +10,7 @@ export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 : "${GAMES:=400}"
 : "${MAIN_MODEL:=capstone_agent/models/capstone_model.pt}"
 : "${PLACEMENT_MODEL:=capstone_agent/models/placement_model.pt}"
+# Export PLACEMENT_MODEL=Perrins_Model/placement_model.pt to pair with MAIN_MODEL from that folder.
 : "${ENEMY_MAIN_MODEL:=${MAIN_MODEL}}"
 : "${BENCHMARK_CSV:=capstone_agent/benchmarks/reeval_matchups.csv}"
 # Each matchup script should ``export RUN_NAME="${RUN_NAME:-reeval_mNN}"`` before sourcing.
@@ -21,6 +22,11 @@ export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 reeval_run() {
   local title="$1"
   shift
+  local place_args=()
+  if [[ -n "${PLACEMENT_MODEL:-}" ]]; then
+    # Passed through for pairing with MAIN_MODEL; random/rollout/AB placement agents ignore load.
+    place_args+=(--placement-model "${PLACEMENT_MODEL}")
+  fi
   echo ""
   echo "================================================================"
   echo " ${title}"
@@ -33,5 +39,6 @@ reeval_run() {
     --map-mode "${MAP_MODE}" \
     --map-template "${MAP_TEMPLATE}" \
     --fixed-map-seed "${FIXED_MAP_SEED}" \
+    "${place_args[@]}" \
     "$@"
 }

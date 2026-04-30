@@ -1,0 +1,34 @@
+{
+  "label": "Perrins Model",
+  "created_utc": "2026-04-30T00:04:55.666941+00:00",
+  "git_commit": "327e7ae964b6264431f19816222e88240703ce94",
+  "source_paths": {
+    "capstone_model.pt": "capstone_agent/models/capstone_model.pt",
+    "placement_model.pt": "capstone_agent/models/placement_model.pt",
+    "training_metrics.csv": "capstone_agent/benchmarks/training_metrics.csv",
+    "train_mcts_greedy_ramp_200k.sbatch": "capstone_agent/slurm/train_mcts_greedy_ramp_200k.sbatch"
+  },
+  "artifacts": [
+    {
+      "filename": "capstone_model.pt",
+      "bytes": 25209101,
+      "sha256": "9ecd80a92c0afd1b338caf1d8db7fce07a69a69475c92b840e2b1abb4e11ee4d"
+    },
+    {
+      "filename": "placement_model.pt",
+      "bytes": 430519,
+      "sha256": "ac1d9e18654d3d9ebb7868029e8367610b142e4cebf920912896409b9515a612"
+    },
+    {
+      "filename": "training_metrics.csv",
+      "bytes": 3799487,
+      "sha256": "8828fb86de9c19c4398031c417d6db7b6c4963158489ae6fe910201792144454"
+    },
+    {
+      "filename": "train_mcts_greedy_ramp_200k.sbatch",
+      "bytes": 854,
+      "sha256": "f1e7f24065ceb0480df6f2b8cd46abe2424aa1eb14b5d1443e30389080e41975"
+    }
+  ],
+  "note": "Replay JSONs were not copied (large); copy from capstone_agent/replays/ if needed."
+}

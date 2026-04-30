@@ -1,0 +1,4 @@
+timestamp_utc,run_name,mode,loaded_model_path,game_index,games_total,status,won,terminated,truncated,steps,reward,cum_wins,cum_losses,cum_truncations,cum_win_rate,self_seat,went_first
+2026-04-30T00:38:36.360519+00:00,reeval_m08,eval,capstone_agent/models/vab123_simple/main_play.pt,1,3,LOST,0,1,0,130,-1.006422222222222,0,1,0,0.0,1,0
+2026-04-30T00:38:37.839117+00:00,reeval_m08,eval,capstone_agent/models/vab123_simple/main_play.pt,2,3,LOST,0,1,0,63,-1.00185,0,2,0,0.0,1,0
+2026-04-30T00:38:39.782121+00:00,reeval_m08,eval,capstone_agent/models/vab123_simple/main_play.pt,3,3,LOST,0,1,0,88,-1.0001666666666666,0,3,0,0.0,1,0

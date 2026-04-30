@@ -1,0 +1,98 @@
+[
+  {
+    "run_name": "reeval_m01",
+    "games": 40,
+    "wins": 8,
+    "losses": 32,
+    "truncations": 0,
+    "win_rate": 0.2,
+    "ci_low": 0.10499864973166873,
+    "ci_high": 0.34757607381856676,
+    "mean_reward": -0.6010304166666667,
+    "mean_steps": 101.2
+  },
+  {
+    "run_name": "reeval_m02",
+    "games": 40,
+    "wins": 23,
+    "losses": 17,
+    "truncations": 0,
+    "win_rate": 0.575,
+    "ci_low": 0.42194800436059987,
+    "ci_high": 0.7149083147518411,
+    "mean_reward": 0.12412541666666659,
+    "mean_steps": 374.7
+  },
+  {
+    "run_name": "reeval_m03",
+    "games": 40,
+    "wins": 21,
+    "losses": 18,
+    "truncations": 0,
+    "win_rate": 0.525,
+    "ci_low": 0.37497106853929735,
+    "ci_high": 0.6706477044981831,
+    "mean_reward": 0.05030374999999989,
+    "mean_steps": 363.95
+  },
+  {
+    "run_name": "reeval_m04",
+    "games": 40,
+    "wins": 0,
+    "losses": 40,
+    "truncations": 0,
+    "win_rate": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.08762453925039232,
+    "mean_reward": -1.0033419444444445,
+    "mean_steps": 91.325
+  },
+  {
+    "run_name": "reeval_m05",
+    "games": 40,
+    "wins": 37,
+    "losses": 3,
+    "truncations": 0,
+    "win_rate": 0.925,
+    "ci_low": 0.8013546984090248,
+    "ci_high": 0.9741644432281419,
+    "mean_reward": 0.8438775,
+    "mean_steps": 196.25
+  },
+  {
+    "run_name": "reeval_m06",
+    "games": 40,
+    "wins": 37,
+    "losses": 3,
+    "truncations": 0,
+    "win_rate": 0.925,
+    "ci_low": 0.8013546984090248,
+    "ci_high": 0.9741644432281419,
+    "mean_reward": 0.8453256944444444,
+    "mean_steps": 183.725
+  },
+  {
+    "run_name": "reeval_m07",
+    "games": 40,
+    "wins": 3,
+    "losses": 37,
+    "truncations": 0,
+    "win_rate": 0.075,
+    "ci_low": 0.025835556771858226,
+    "ci_high": 0.19864530159097524,
+    "mean_reward": -0.8514201388888889,
+    "mean_steps": 89.875
+  },
+  {
+    "run_name": "reeval_m08",
+    "games": 40,
+    "wins": 0,
+    "losses": 40,
+    "truncations": 0,
+    "win_rate": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.08762453925039232,
+    "mean_reward": -1.0028256944444445,
+    "mean_steps": 90.95
+  }
+]
