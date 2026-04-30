@@ -44,7 +44,13 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(__file__))
 
 from MainPlayAgent import MainPlayAgent
-from Placement.PlacementAgent import PlacementAgent, RandomPlacementAgent, make_placement_agent
+from AlphaBetaMainPlayAgent import AlphaBetaMainPlayAgent
+from Placement.PlacementAgent import (
+    PLACEMENT_STRATEGIES,
+    PlacementAgent,
+    RandomPlacementAgent,
+    make_placement_agent,
+)
 from CapstoneAgent import CapstoneAgent
 from action_map import (
     validate as validate_action_mapping,
@@ -466,6 +472,9 @@ def make_enemy_player(
     main_model_path: Optional[str] = None,
     placement_model_path: Optional[str] = None,
     random_initial_build: bool = False,
+    enemy_placement_strategy: str = "model",
+    enemy_placement_ab_depth: int = 2,
+    enemy_placement_ab_prunning: bool = True,
 ):
     """Construct the training/eval opponent used by CapstoneCatanatronEnv."""
     if enemy_type == "random":
@@ -495,6 +504,9 @@ def make_enemy_player(
             color,
             settlement_play_load_file=placement_model_path,
             main_play_load_file=main_model_path,
+            placement_strategy=enemy_placement_strategy,
+            placement_ab_depth=enemy_placement_ab_depth,
+            placement_ab_prunning=enemy_placement_ab_prunning,
         )
     else:
         raise ValueError(f"Unknown enemy type: {enemy_type}")
@@ -523,6 +535,9 @@ def make_env(
     enemy_placement_model_path: Optional[str] = None,
     reward_function: str = "full",
     enemy_random_initial_build: bool = False,
+    enemy_placement_strategy: str = "model",
+    enemy_placement_ab_depth: int = 2,
+    enemy_placement_ab_prunning: bool = True,
 ):
     enemy = make_enemy_player(
         enemy_type,
@@ -534,6 +549,9 @@ def make_env(
         main_model_path=enemy_main_model_path,
         placement_model_path=enemy_placement_model_path,
         random_initial_build=enemy_random_initial_build,
+        enemy_placement_strategy=enemy_placement_strategy,
+        enemy_placement_ab_depth=enemy_placement_ab_depth,
+        enemy_placement_ab_prunning=enemy_placement_ab_prunning,
     )
     randomize_map = map_mode == "random" and map_template != "TOURNAMENT"
     return gymnasium.make(
@@ -858,9 +876,19 @@ def _make_env_kwargs_for_training_game_index(
         "fixed_map_seed": args.fixed_map_seed,
         "enemy_main_model_path": None,
         "enemy_placement_model_path": None,
+        "enemy_placement_strategy": getattr(args, "enemy_placement_strategy", "model"),
+        "enemy_placement_ab_depth": (
+            args.enemy_placement_ab_depth
+            if getattr(args, "enemy_placement_ab_depth", None) is not None
+            else args.placement_ab_depth
+        ),
+        "enemy_placement_ab_prunning": args.placement_ab_prunning,
         "reward_function": args.reward_function,
         "enemy_random_initial_build": bool(getattr(args, "enemy_random_initial_build", False)),
     }
+    if enemy_type == "rl-capstone":
+        env_kw["enemy_main_model_path"] = getattr(args, "enemy_main_model", None)
+        env_kw["enemy_placement_model_path"] = getattr(args, "enemy_placement_model", None)
     return env_kw, label
 
 
@@ -880,6 +908,9 @@ def _make_train_mac_kwargs_for_rollout(
         "model_path": None,
         "placement_model_path": None,
         "placement_strategy": args.placement_strategy,
+        "main_play_mode": args.main_play_mode,
+        "main_play_ab_depth": args.main_play_ab_depth,
+        "main_play_ab_prunning": args.main_play_ab_prunning,
         "placement_ab_depth": args.placement_ab_depth,
         "placement_ab_prunning": args.placement_ab_prunning,
         "reward_function": args.reward_function,
@@ -889,6 +920,10 @@ def _make_train_mac_kwargs_for_rollout(
 
 def _serialize_rollout_weights_cpu(agent: CapstoneAgent, placement_strategy: str) -> Tuple[bytes, Optional[bytes]]:
     """Pickle-friendly CPU state dicts for multiprocessing rollout collection."""
+    if not hasattr(agent.main_agent, "model"):
+        raise ValueError(
+            "Parallel rollout collection requires a neural main agent (--main-play-mode model)."
+        )
     bio = io.BytesIO()
     torch.save(
         {k: v.detach().cpu() for k, v in agent.main_agent.model.state_dict().items()},
@@ -911,8 +946,9 @@ def _serialize_rollout_weights_cpu(agent: CapstoneAgent, placement_strategy: str
 
 def _retarget_capstone_agent_cpu(agent: CapstoneAgent) -> None:
     cpu = torch.device("cpu")
-    agent.main_agent.device = cpu
-    agent.main_agent.model.to(cpu)
+    if hasattr(agent.main_agent, "model"):
+        agent.main_agent.device = cpu
+        agent.main_agent.model.to(cpu)
     if hasattr(agent.placement_agent, "model"):
         agent.placement_agent.device = cpu
         agent.placement_agent.model.to(cpu)
@@ -1158,6 +1194,9 @@ def make_agent_and_env(
     model_path: Optional[str] = None,
     placement_model_path: Optional[str] = None,
     placement_strategy: str = "model",
+    main_play_mode: str = "model",
+    main_play_ab_depth: int = 2,
+    main_play_ab_prunning: bool = True,
     enemy_type: str = "random",
     enemy_ab_depth: int = 2,
     enemy_mcts_n: int = 100,
@@ -1168,6 +1207,9 @@ def make_agent_and_env(
     fixed_map_seed: int = 0,
     enemy_main_model_path: Optional[str] = None,
     enemy_placement_model_path: Optional[str] = None,
+    enemy_placement_strategy: str = "model",
+    enemy_placement_ab_depth: Optional[int] = None,
+    enemy_placement_ab_prunning: Optional[bool] = None,
     placement_ab_depth: int = 2,
     placement_ab_prunning: bool = True,
     reward_function: str = "full",
@@ -1199,14 +1241,24 @@ def make_agent_and_env(
     """
     validate_action_mapping()
 
-    if model_path is not None and main_state_dict is not None:
-        raise ValueError("Provide at most one of model_path and main_state_dict")
-
-    main_agent = MainPlayAgent(obs_size=obs_size, hidden_size=hidden_size)
-    if main_state_dict is not None:
-        main_agent.model.load_state_dict(main_state_dict)
-    elif model_path is not None:
-        main_agent.load(model_path)
+    if main_play_mode not in ("model", "alphabeta"):
+        raise ValueError(f"Unknown main_play_mode: {main_play_mode!r}")
+    if main_play_mode == "alphabeta":
+        if model_path is not None or main_state_dict is not None:
+            raise ValueError(
+                "main_play_mode='alphabeta' cannot be combined with model_path or main_state_dict"
+            )
+        main_agent = AlphaBetaMainPlayAgent(
+            depth=main_play_ab_depth, prunning=main_play_ab_prunning
+        )
+    else:
+        if model_path is not None and main_state_dict is not None:
+            raise ValueError("Provide at most one of model_path and main_state_dict")
+        main_agent = MainPlayAgent(obs_size=obs_size, hidden_size=hidden_size)
+        if main_state_dict is not None:
+            main_agent.model.load_state_dict(main_state_dict)
+        elif model_path is not None:
+            main_agent.load(model_path)
 
     placement_kwargs = {
         "obs_size": obs_size,
@@ -1226,6 +1278,13 @@ def make_agent_and_env(
     elif placement_model_path is not None:
         placement_agent.load(placement_model_path)
 
+    e_place_depth = (
+        placement_ab_depth if enemy_placement_ab_depth is None else enemy_placement_ab_depth
+    )
+    e_place_prune = (
+        placement_ab_prunning if enemy_placement_ab_prunning is None else enemy_placement_ab_prunning
+    )
+
     env = make_env(
         enemy_type=enemy_type,
         enemy_ab_depth=enemy_ab_depth,
@@ -1239,6 +1298,9 @@ def make_agent_and_env(
         enemy_placement_model_path=enemy_placement_model_path,
         reward_function=reward_function,
         enemy_random_initial_build=enemy_random_initial_build,
+        enemy_placement_strategy=enemy_placement_strategy,
+        enemy_placement_ab_depth=e_place_depth,
+        enemy_placement_ab_prunning=e_place_prune,
     )
     router = CapstoneAgent(placement_agent, main_agent)
 
@@ -1288,6 +1350,7 @@ def evaluate_challenger_vs_champion(
         fixed_map_seed=fixed_map_seed,
         enemy_main_model_path=champion_main_model_path,
         enemy_placement_model_path=cap_place,
+        enemy_placement_strategy="model",
         reward_function=reward_function,
         enemy_random_initial_build=enemy_random_initial_build,
     )
@@ -1319,6 +1382,7 @@ def evaluate_challenger_vs_champion(
         fixed_map_seed=fixed_map_seed,
         enemy_main_model_path=challenger_main_model_path,
         enemy_placement_model_path=ch_place,
+        enemy_placement_strategy="model",
         reward_function=reward_function,
         enemy_random_initial_build=enemy_random_initial_build,
     )
@@ -1344,6 +1408,15 @@ def evaluate_challenger_vs_champion(
         "games": num_games,
         "win_rate": challenger_wins / num_games,
     }
+
+
+def _parse_placement_strategy_arg(name: str) -> str:
+    if name not in PLACEMENT_STRATEGIES:
+        allowed = ", ".join(sorted(PLACEMENT_STRATEGIES))
+        raise argparse.ArgumentTypeError(
+            f"Unknown placement strategy {name!r}. Registered: {allowed}"
+        )
+    return name
 
 
 def main():
@@ -1431,9 +1504,35 @@ def main():
         ),
     )
     parser.add_argument(
-        "--placement-strategy", type=str, default="model",
-        choices=["model", "random", "alphabeta"],
-        help="Placement agent strategy: 'model' (learned), 'random', or 'alphabeta'.",
+        "--placement-strategy",
+        type=_parse_placement_strategy_arg,
+        default="model",
+        help=(
+            "Blue placement strategy: any name registered in Placement.PlacementAgent "
+            "(e.g. model, random, alphabeta, rollout_value_stable)."
+        ),
+    )
+    parser.add_argument(
+        "--main-play-mode",
+        type=str,
+        default="model",
+        choices=["model", "alphabeta"],
+        help=(
+            "Blue main-phase policy after opening: learned PPO network (model) or "
+            "AlphaBeta search (alphabeta)."
+        ),
+    )
+    parser.add_argument(
+        "--main-play-ab-depth",
+        type=int,
+        default=2,
+        help="AlphaBeta search depth for Blue when --main-play-mode=alphabeta.",
+    )
+    parser.add_argument(
+        "--main-play-ab-prunning",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="AlphaBeta pruning for Blue when --main-play-mode=alphabeta.",
     )
     parser.add_argument(
         "--placement-model", type=str, default=None,
@@ -1528,6 +1627,39 @@ def main():
         type=int,
         default=25,
         help="Greedy playout count for --enemy=greedy and greedy entries in schedule/mix.",
+    )
+    parser.add_argument(
+        "--enemy-main-model",
+        type=str,
+        default=None,
+        help="Required when --enemy rl-capstone: path to opponent main-play weights (.pt).",
+    )
+    parser.add_argument(
+        "--enemy-placement-model",
+        type=str,
+        default=None,
+        help=(
+            "When --enemy rl-capstone and --enemy-placement-strategy model: path to "
+            "opponent placement weights (.pt)."
+        ),
+    )
+    parser.add_argument(
+        "--enemy-placement-strategy",
+        type=_parse_placement_strategy_arg,
+        default="model",
+        help=(
+            "Opponent placement policy when --enemy rl-capstone (same registry as "
+            "--placement-strategy)."
+        ),
+    )
+    parser.add_argument(
+        "--enemy-placement-ab-depth",
+        type=int,
+        default=None,
+        help=(
+            "AlphaBeta depth for opponent opening when --enemy-placement-strategy alphabeta "
+            "(defaults to --placement-ab-depth)."
+        ),
     )
     parser.add_argument(
         "--enemy-fixed-schedule",
@@ -1879,6 +2011,20 @@ def main():
         parser.error("--enemy-mcts-n must be >= 1")
     if args.enemy_greedy_n < 1:
         parser.error("--enemy-greedy-n must be >= 1")
+    if args.enemy == "rl-capstone" and not args.enemy_main_model:
+        parser.error("--enemy rl-capstone requires --enemy-main-model")
+    if args.enemy != "rl-capstone":
+        if args.enemy_main_model:
+            parser.error("--enemy-main-model is only valid with --enemy rl-capstone")
+        if args.enemy_placement_model:
+            parser.error("--enemy-placement-model is only valid with --enemy rl-capstone")
+    if args.main_play_mode == "alphabeta":
+        if args.train:
+            parser.error("--main-play-mode alphabeta cannot be used with --train")
+        if args.load:
+            parser.error("--main-play-mode alphabeta cannot be combined with --load")
+        if args.self_play_ladder:
+            parser.error("--main-play-mode alphabeta cannot be combined with --self-play-ladder")
     if args.placement_ab_depth < 1:
         parser.error("--placement-ab-depth must be >= 1")
     if args.save_every_games < 0:
@@ -2019,6 +2165,9 @@ def main():
             f"  preset={args.preset} difficulty={args.difficulty}\n"
             f"  games={args.games} train={args.train}\n"
             f"  placement_strategy={args.placement_strategy}\n"
+            f"  main_play_mode={args.main_play_mode} "
+            f"main_play_ab_depth={args.main_play_ab_depth} "
+            f"main_play_ab_prunning={args.main_play_ab_prunning}\n"
             f"  deterministic_policy={getattr(args, 'deterministic_policy', False)}\n"
             f"  reward_function={args.reward_function}\n"
             f"  enemy_fixed_schedule={args.enemy_fixed_schedule}\n"
@@ -2061,6 +2210,9 @@ def main():
         model_path=loaded_model_path,
         placement_model_path=loaded_placement_path,
         placement_strategy=args.placement_strategy,
+        main_play_mode=args.main_play_mode,
+        main_play_ab_depth=args.main_play_ab_depth,
+        main_play_ab_prunning=args.main_play_ab_prunning,
         enemy_type=(
             first_phase.enemy_type
             if first_phase
@@ -2081,6 +2233,10 @@ def main():
         map_template=resolved_map_template,
         map_mode=args.map_mode,
         fixed_map_seed=args.fixed_map_seed,
+        enemy_main_model_path=args.enemy_main_model,
+        enemy_placement_model_path=args.enemy_placement_model,
+        enemy_placement_strategy=args.enemy_placement_strategy,
+        enemy_placement_ab_depth=args.enemy_placement_ab_depth,
         placement_ab_depth=args.placement_ab_depth,
         placement_ab_prunning=args.placement_ab_prunning,
         reward_function=args.reward_function,
@@ -2128,7 +2284,14 @@ def main():
             reward_function=args.reward_function,
             enemy_random_initial_build=args.enemy_random_initial_build,
         )
-    main_params = sum(p.numel() for p in agent.main_agent.model.parameters())
+    if hasattr(agent.main_agent, "model"):
+        main_params = sum(p.numel() for p in agent.main_agent.model.parameters())
+        main_desc = f"{main_params:,} params"
+    else:
+        main_desc = (
+            f"AlphaBeta(depth={args.main_play_ab_depth}, "
+            f"prunning={args.main_play_ab_prunning})"
+        )
     pa = agent.placement_agent
     if hasattr(pa, "model"):
         place_desc = f"{sum(p.numel() for p in pa.model.parameters()):,} params"
@@ -2142,7 +2305,7 @@ def main():
     device = get_device()
 
     print(
-        f"Main agent ready      ({main_params:,} params, obs={FEATURE_SPACE_SIZE}, actions=245)\n"
+        f"Main agent ready      ({main_desc}, obs={FEATURE_SPACE_SIZE}, actions=245)\n"
         f"Placement agent ready ({place_desc})\n"
         f"Device: {device}"
     )
@@ -2225,10 +2388,15 @@ def main():
         replay_detail = (
             f"enabled, dir={args.save_games_json_dir}, every {args.save_games_json_every} games"
         )
+    if args.main_play_mode == "model":
+        main_weights_line = loaded_model_path or "[fresh/random init]"
+    else:
+        main_weights_line = "[AlphaBeta search — no main weights]"
     print(
         "Run configuration:\n"
-        f"  Main agent: {main_params:,} params (obs={FEATURE_SPACE_SIZE}, actions=245)\n"
-        f"  Main weights: {loaded_model_path or '[fresh/random init]'}\n"
+        f"  Main agent: {main_desc} (obs={FEATURE_SPACE_SIZE}, actions=245); "
+        f"mode={args.main_play_mode}\n"
+        f"  Main weights: {main_weights_line}\n"
         f"  Placement agent: strategy={args.placement_strategy}, {place_desc}\n"
         f"  Placement weights: {loaded_placement_path or '[none loaded]'}\n"
         f"  Opponent: {enemy_detail}\n"

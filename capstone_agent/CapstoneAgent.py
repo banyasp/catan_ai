@@ -1,5 +1,6 @@
 from Placement.PlacementAgent import PlacementAgent
 from MainPlayAgent import MainPlayAgent
+from typing import Any, Optional, Union
 import os
 
 import torch
@@ -24,7 +25,11 @@ class CapstoneAgent:
     be used as a drop-in replacement in simulate_game / training_loop.
     """
 
-    def __init__(self, placement_agent: PlacementAgent, main_agent: MainPlayAgent):
+    def __init__(
+        self,
+        placement_agent: PlacementAgent,
+        main_agent: Union[MainPlayAgent, Any],
+    ):
         self.placement_agent = placement_agent
         self.main_agent = main_agent
         self._last_was_placement = False
@@ -71,8 +76,11 @@ class CapstoneAgent:
                 last_mask, dtype=torch.float32, device=device
             ).unsqueeze(0)
             with torch.no_grad():
-                _, v_main = self.main_agent.model(obs_t, mask_t)
-                last_v_main = v_main.item()
+                if hasattr(self.main_agent, "model"):
+                    _, v_main = self.main_agent.model(obs_t, mask_t)
+                    last_v_main = v_main.item()
+                else:
+                    last_v_main = 0.0
                 place_model = getattr(self.placement_agent, "model", None)
                 if place_model is not None:
                     _, v_place = self.placement_agent.model(obs_t, mask_t)
@@ -84,9 +92,9 @@ class CapstoneAgent:
         return main_metrics if isinstance(main_metrics, dict) else {}
 
     @property
-    def model(self):
-        """Main play policy/value (used by training loops for last-state bootstrap)."""
-        return self.main_agent.model
+    def model(self) -> Optional[Any]:
+        """Main play policy/value (used by training loops); None when main is non-neural."""
+        return getattr(self.main_agent, "model", None)
 
     def load(self, main_path, placement_path=None):
         self.main_agent.load(main_path)

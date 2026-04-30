@@ -318,6 +318,31 @@ done
 tmux attach -t dcc_train
 ```
 
+### DCC with Slurm (No tmux)
+
+If you prefer scheduler-managed runs over `tmux`, use the included batch file:
+
+- Script: `capstone_agent/slurm/train_mcts_greedy_ramp_200k.sbatch`
+- Behavior: runs a 200k-game training job with smooth ramp
+  `mcts@100:1.0,greedy@25:0.0 -> mcts@100:0.8,greedy@25:0.2`
+
+```bash
+# Submit
+sbatch capstone_agent/slurm/train_mcts_greedy_ramp_200k.sbatch
+
+# Monitor queue
+squeue -u $USER
+
+# Watch logs (replace <jobid>)
+tail -f logs/catan_mcts_greedy_200k-<jobid>.out
+
+# Cancel if needed
+scancel <jobid>
+```
+
+Note: tune `#SBATCH --partition`, `--gres`, `--cpus-per-task`, and `--mem` in the
+script to match your DCC account/queue policy.
+
 ## Command Line Interface
 Catanatron provides a `catanatron-play` CLI tool to run large scale simulations.
 

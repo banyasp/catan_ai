@@ -16,11 +16,15 @@ if root_dir not in sys.path:
 
 if normalized_path not in sys.path:
     sys.path.append(normalized_path)
-from capstone_agent.CapstoneAgent import CapstoneAgent # main gameplay agent
+from capstone_agent.CapstoneAgent import CapstoneAgent  # main gameplay agent
 from capstone_agent.MainPlayAgent import MainPlayAgent
-from capstone_agent.Placement.PlacementAgent import PlacementAgent
+from capstone_agent.Placement.PlacementAgent import PlacementAgent, make_placement_agent
 
-from capstone_agent.CONSTANTS import ACTION_SPACE_SIZE
+from capstone_agent.CONSTANTS import (
+    ACTION_SPACE_SIZE,
+    FEATURE_SPACE_SIZE,
+    PLACEMENT_AGENT_HIDDEN_SIZE,
+)
 
 gym_env_path = os.path.join(current_script_dir, "../gym/envs")
 normalized_path = os.path.normpath(gym_env_path)
@@ -34,26 +38,45 @@ from catanatron.gym.envs.catanatron_env import (
 
 class RLCapstonePlayer(Player):
 
-    def __init__(self, 
-                 color: Color,
-                 settlement_play_load_file: str = None, 
-                 main_play_load_file: str = None):
+    def __init__(
+        self,
+        color: Color,
+        settlement_play_load_file: str = None,
+        main_play_load_file: str = None,
+        placement_strategy: str = "model",
+        placement_ab_depth: int = 2,
+        placement_ab_prunning: bool = True,
+    ):
 
         self.color = color
-        
-        # load settlement agent
-        self.settlement_play_agent = PlacementAgent()
-        if settlement_play_load_file is not None:
-            self.settlement_play_agent.load(settlement_play_load_file)
-        
-        # load main play agent
+
+        if placement_strategy == "model":
+            self.settlement_play_agent = PlacementAgent()
+            if settlement_play_load_file is not None:
+                self.settlement_play_agent.load(settlement_play_load_file)
+        else:
+            placement_kwargs = {
+                "obs_size": FEATURE_SPACE_SIZE,
+                "hidden_size": PLACEMENT_AGENT_HIDDEN_SIZE,
+            }
+            if placement_strategy == "alphabeta":
+                placement_kwargs["depth"] = placement_ab_depth
+                placement_kwargs["prunning"] = placement_ab_prunning
+            self.settlement_play_agent = make_placement_agent(
+                placement_strategy, **placement_kwargs
+            )
+            if settlement_play_load_file is not None and hasattr(
+                self.settlement_play_agent, "load"
+            ):
+                self.settlement_play_agent.load(settlement_play_load_file)
+
         self.main_play_agent = MainPlayAgent()
         if main_play_load_file is not None:
             self.main_play_agent.load(main_play_load_file)
 
-        # create router (full play) agent
-        self.full_agent = CapstoneAgent(self.settlement_play_agent,
-                                        self.main_play_agent)
+        self.full_agent = CapstoneAgent(
+            self.settlement_play_agent, self.main_play_agent
+        )
     
     def get_valid_actions(self, playable_actions: Iterable[Action]):
         """
